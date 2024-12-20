@@ -252,10 +252,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error("Invalid arguments for todoist_get_tasks");
       }
       
-      const tasks = await todoistClient.getTasks({
-        projectId: args.project_id,
-        filter: args.filter
-      });
+      // Only pass filter if at least one filtering parameter is provided
+      const apiParams: any = {};
+      if (args.project_id) {
+        apiParams.projectId = args.project_id;
+      }
+      if (args.filter) {
+        apiParams.filter = args.filter;
+      }
+      // If no filters provided, default to showing all tasks
+      const tasks = await todoistClient.getTasks(Object.keys(apiParams).length > 0 ? apiParams : undefined);
 
       // Apply additional filters
       let filteredTasks = tasks;
