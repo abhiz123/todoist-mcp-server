@@ -1,4 +1,5 @@
 # Todoist MCP Server
+[![smithery badge](https://smithery.ai/badge/@abhiz123/todoist-mcp-server)](https://smithery.ai/server/@abhiz123/todoist-mcp-server)
 
 An MCP (Model Context Protocol) server implementation that integrates Claude with Todoist, enabling natural language task management. This server allows Claude to interact with your Todoist tasks using everyday language.
 
@@ -12,6 +13,15 @@ An MCP (Model Context Protocol) server implementation that integrates Claude wit
 
 ## Installation
 
+### Installing via Smithery
+
+To install Todoist MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@abhiz123/todoist-mcp-server):
+
+```bash
+npx -y @smithery/cli install @abhiz123/todoist-mcp-server --client claude
+```
+
+### Manual Installation
 ```bash
 npm install -g @abhiz123/todoist-mcp-server
 ```
