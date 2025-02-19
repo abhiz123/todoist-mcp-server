@@ -12,30 +12,32 @@ import { TodoistApi } from "@doist/todoist-api-typescript";
 // Define tools
 const CREATE_TASK_TOOL: Tool = {
   name: "todoist_create_task",
-  description: "Create a new task in Todoist with optional description, due date, and priority",
+  description:
+    "Create a new task in Todoist with optional description, due date, and priority",
   inputSchema: {
     type: "object",
     properties: {
       content: {
         type: "string",
-        description: "The content/title of the task"
+        description: "The content/title of the task",
       },
       description: {
         type: "string",
-        description: "Detailed description of the task (optional)"
+        description: "Detailed description of the task (optional)",
       },
       due_string: {
         type: "string",
-        description: "Natural language due date like 'tomorrow', 'next Monday', 'Jan 23' (optional)"
+        description:
+          "Natural language due date like 'tomorrow', 'next Monday', 'Jan 23' (optional)",
       },
       priority: {
         type: "number",
         description: "Task priority from 1 (normal) to 4 (urgent) (optional)",
-        enum: [1, 2, 3, 4]
-      }
+        enum: [1, 2, 3, 4],
+      },
     },
-    required: ["content"]
-  }
+    required: ["content"],
+  },
 };
 
 const GET_TASKS_TOOL: Tool = {
@@ -46,56 +48,60 @@ const GET_TASKS_TOOL: Tool = {
     properties: {
       project_id: {
         type: "string",
-        description: "Filter tasks by project ID (optional)"
+        description: "Filter tasks by project ID (optional)",
       },
       filter: {
         type: "string",
-        description: "Natural language filter like 'today', 'tomorrow', 'next week', 'priority 1', 'overdue' (optional)"
+        description:
+          "Natural language filter like 'today', 'tomorrow', 'next week', 'priority 1', 'overdue' (optional)",
       },
       priority: {
         type: "number",
         description: "Filter by priority level (1-4) (optional)",
-        enum: [1, 2, 3, 4]
+        enum: [1, 2, 3, 4],
       },
       limit: {
         type: "number",
         description: "Maximum number of tasks to return (optional)",
-        default: 10
-      }
-    }
-  }
+        default: 10,
+      },
+    },
+  },
 };
 
 const UPDATE_TASK_TOOL: Tool = {
   name: "todoist_update_task",
-  description: "Update an existing task in Todoist by searching for it by name and then updating it",
+  description:
+    "Update an existing task in Todoist by searching for it by name and then updating it",
   inputSchema: {
     type: "object",
     properties: {
       task_name: {
         type: "string",
-        description: "Name/content of the task to search for and update"
+        description: "Name/content of the task to search for and update",
       },
       content: {
         type: "string",
-        description: "New content/title for the task (optional)"
+        description: "New content/title for the task (optional)",
       },
       description: {
         type: "string",
-        description: "New description for the task (optional)"
+        description: "New description for the task (optional)",
       },
       due_string: {
         type: "string",
-        description: "New due date in natural language like 'tomorrow', 'next Monday' (optional)"
+        description:
+          "New due date in natural language like 'tomorrow', 'next Monday' (optional)",
       },
       priority: {
         type: "number",
-        description: "New priority level from 1 (normal) to 4 (urgent) (optional)",
-        enum: [1, 2, 3, 4]
-      }
+        description:
+          "New priority level from 1 (normal) to 4 (urgent) (optional)",
+        enum: [1, 2, 3, 4],
+      },
     },
-    required: ["task_name"]
-  }
+    required: ["task_name"],
+  },
 };
 
 const DELETE_TASK_TOOL: Tool = {
@@ -106,11 +112,11 @@ const DELETE_TASK_TOOL: Tool = {
     properties: {
       task_name: {
         type: "string",
-        description: "Name/content of the task to search for and delete"
-      }
+        description: "Name/content of the task to search for and delete",
+      },
     },
-    required: ["task_name"]
-  }
+    required: ["task_name"],
+  },
 };
 
 const COMPLETE_TASK_TOOL: Tool = {
@@ -121,11 +127,11 @@ const COMPLETE_TASK_TOOL: Tool = {
     properties: {
       task_name: {
         type: "string",
-        description: "Name/content of the task to search for and complete"
-      }
+        description: "Name/content of the task to search for and complete",
+      },
     },
-    required: ["task_name"]
-  }
+    required: ["task_name"],
+  },
 };
 
 // Server implementation
@@ -138,7 +144,7 @@ const server = new Server(
     capabilities: {
       tools: {},
     },
-  },
+  }
 );
 
 // Check for API token
@@ -152,7 +158,7 @@ if (!TODOIST_API_TOKEN) {
 const todoistClient = new TodoistApi(TODOIST_API_TOKEN);
 
 // Type guards for arguments
-function isCreateTaskArgs(args: unknown): args is { 
+function isCreateTaskArgs(args: unknown): args is {
   content: string;
   description?: string;
   due_string?: string;
@@ -166,16 +172,13 @@ function isCreateTaskArgs(args: unknown): args is {
   );
 }
 
-function isGetTasksArgs(args: unknown): args is { 
+function isGetTasksArgs(args: unknown): args is {
   project_id?: string;
   filter?: string;
   priority?: number;
   limit?: number;
 } {
-  return (
-    typeof args === "object" &&
-    args !== null
-  );
+  return typeof args === "object" && args !== null;
 }
 
 function isUpdateTaskArgs(args: unknown): args is {
@@ -217,7 +220,13 @@ function isCompleteTaskArgs(args: unknown): args is {
 
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [CREATE_TASK_TOOL, GET_TASKS_TOOL, UPDATE_TASK_TOOL, DELETE_TASK_TOOL, COMPLETE_TASK_TOOL],
+  tools: [
+    CREATE_TASK_TOOL,
+    GET_TASKS_TOOL,
+    UPDATE_TASK_TOOL,
+    DELETE_TASK_TOOL,
+    COMPLETE_TASK_TOOL,
+  ],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -236,13 +245,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: args.content,
         description: args.description,
         dueString: args.due_string,
-        priority: args.priority
+        priority: args.priority,
       });
       return {
-        content: [{ 
-          type: "text", 
-          text: `Task created:\nTitle: ${task.content}${task.description ? `\nDescription: ${task.description}` : ''}${task.due ? `\nDue: ${task.due.string}` : ''}${task.priority ? `\nPriority: ${task.priority}` : ''}` 
-        }],
+        content: [
+          {
+            type: "text",
+            text: `Task created:\nTitle: ${task.content}${
+              task.description ? `\nDescription: ${task.description}` : ""
+            }${task.due ? `\nDue: ${task.due.string}` : ""}${
+              task.priority ? `\nPriority: ${task.priority}` : ""
+            }`,
+          },
+        ],
         isError: false,
       };
     }
@@ -251,32 +266,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!isGetTasksArgs(args)) {
         throw new Error("Invalid arguments for todoist_get_tasks");
       }
-      
+
       const tasks = await todoistClient.getTasks({
         projectId: args.project_id,
-        filter: args.filter
+        filter: args.filter ?? "view all",
       });
 
       // Apply additional filters
       let filteredTasks = tasks;
       if (args.priority) {
-        filteredTasks = filteredTasks.filter(task => task.priority === args.priority);
+        filteredTasks = filteredTasks.filter(
+          (task) => task.priority === args.priority
+        );
       }
-      
+
       // Apply limit
       if (args.limit && args.limit > 0) {
         filteredTasks = filteredTasks.slice(0, args.limit);
       }
-      
-      const taskList = filteredTasks.map(task => 
-        `- ${task.content}${task.description ? `\n  Description: ${task.description}` : ''}${task.due ? `\n  Due: ${task.due.string}` : ''}${task.priority ? `\n  Priority: ${task.priority}` : ''}`
-      ).join('\n\n');
-      
+
+      const taskList = filteredTasks
+        .map(
+          (task) =>
+            `- ${task.content}${
+              task.description ? `\n  Description: ${task.description}` : ""
+            }${task.due ? `\n  Due: ${task.due.string}` : ""}${
+              task.priority ? `\n  Priority: ${task.priority}` : ""
+            }`
+        )
+        .join("\n\n");
+
       return {
-        content: [{ 
-          type: "text", 
-          text: filteredTasks.length > 0 ? taskList : "No tasks found matching the criteria" 
-        }],
+        content: [
+          {
+            type: "text",
+            text:
+              filteredTasks.length > 0
+                ? taskList
+                : "No tasks found matching the criteria",
+          },
+        ],
         isError: false,
       };
     }
@@ -288,16 +317,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // First, search for the task
       const tasks = await todoistClient.getTasks();
-      const matchingTask = tasks.find(task => 
+      const matchingTask = tasks.find((task) =>
         task.content.toLowerCase().includes(args.task_name.toLowerCase())
       );
 
       if (!matchingTask) {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Could not find a task matching "${args.task_name}"` 
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Could not find a task matching "${args.task_name}"`,
+            },
+          ],
           isError: true,
         };
       }
@@ -309,13 +340,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (args.due_string) updateData.dueString = args.due_string;
       if (args.priority) updateData.priority = args.priority;
 
-      const updatedTask = await todoistClient.updateTask(matchingTask.id, updateData);
-      
+      const updatedTask = await todoistClient.updateTask(
+        matchingTask.id,
+        updateData
+      );
+
       return {
-        content: [{ 
-          type: "text", 
-          text: `Task "${matchingTask.content}" updated:\nNew Title: ${updatedTask.content}${updatedTask.description ? `\nNew Description: ${updatedTask.description}` : ''}${updatedTask.due ? `\nNew Due Date: ${updatedTask.due.string}` : ''}${updatedTask.priority ? `\nNew Priority: ${updatedTask.priority}` : ''}` 
-        }],
+        content: [
+          {
+            type: "text",
+            text: `Task "${matchingTask.content}" updated:\nNew Title: ${
+              updatedTask.content
+            }${
+              updatedTask.description
+                ? `\nNew Description: ${updatedTask.description}`
+                : ""
+            }${
+              updatedTask.due ? `\nNew Due Date: ${updatedTask.due.string}` : ""
+            }${
+              updatedTask.priority
+                ? `\nNew Priority: ${updatedTask.priority}`
+                : ""
+            }`,
+          },
+        ],
         isError: false,
       };
     }
@@ -327,28 +375,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // First, search for the task
       const tasks = await todoistClient.getTasks();
-      const matchingTask = tasks.find(task => 
+      const matchingTask = tasks.find((task) =>
         task.content.toLowerCase().includes(args.task_name.toLowerCase())
       );
 
       if (!matchingTask) {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Could not find a task matching "${args.task_name}"` 
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Could not find a task matching "${args.task_name}"`,
+            },
+          ],
           isError: true,
         };
       }
 
       // Delete the task
       await todoistClient.deleteTask(matchingTask.id);
-      
+
       return {
-        content: [{ 
-          type: "text", 
-          text: `Successfully deleted task: "${matchingTask.content}"` 
-        }],
+        content: [
+          {
+            type: "text",
+            text: `Successfully deleted task: "${matchingTask.content}"`,
+          },
+        ],
         isError: false,
       };
     }
@@ -360,28 +412,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // First, search for the task
       const tasks = await todoistClient.getTasks();
-      const matchingTask = tasks.find(task => 
+      const matchingTask = tasks.find((task) =>
         task.content.toLowerCase().includes(args.task_name.toLowerCase())
       );
 
       if (!matchingTask) {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Could not find a task matching "${args.task_name}"` 
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Could not find a task matching "${args.task_name}"`,
+            },
+          ],
           isError: true,
         };
       }
 
       // Complete the task
       await todoistClient.closeTask(matchingTask.id);
-      
+
       return {
-        content: [{ 
-          type: "text", 
-          text: `Successfully completed task: "${matchingTask.content}"` 
-        }],
+        content: [
+          {
+            type: "text",
+            text: `Successfully completed task: "${matchingTask.content}"`,
+          },
+        ],
         isError: false,
       };
     }
@@ -395,7 +451,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: "text",
-          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Error: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
         },
       ],
       isError: true,
