@@ -24,6 +24,14 @@ const CREATE_TASK_TOOL: Tool = {
         type: "string",
         description: "Detailed description of the task (optional)"
       },
+      project_id: {
+        type: "string",
+        description: "ID of the project to add the task to (optional)"
+      },
+      project_name: {
+        type: "string",
+        description: "Name of the project to add the task to (e.g., 'Shopping', 'Work') (optional)"
+      },
       due_string: {
         type: "string",
         description: "Natural language due date like 'tomorrow', 'next Monday', 'Jan 23' (optional)"
@@ -48,6 +56,10 @@ const GET_TASKS_TOOL: Tool = {
         type: "string",
         description: "Filter tasks by project ID (optional)"
       },
+      project_name: {
+        type: "string",
+        description: "Filter tasks by project name (e.g., 'Shopping', 'Work') (optional)"
+      },
       filter: {
         type: "string",
         description: "Natural language filter like 'today', 'tomorrow', 'next week', 'priority 1', 'overdue' (optional)"
@@ -61,6 +73,20 @@ const GET_TASKS_TOOL: Tool = {
         type: "number",
         description: "Maximum number of tasks to return (optional)",
         default: 10
+      }
+    }
+  }
+};
+
+const GET_PROJECTS_TOOL: Tool = {
+  name: "todoist_get_projects",
+  description: "Get a list of projects from Todoist with optional filters",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filter: {
+        type: "string",
+        description: "Natural language filter like 'Career planning', 'shopping','work', 'personal growth' (optional)"
       }
     }
   }
@@ -132,7 +158,7 @@ const COMPLETE_TASK_TOOL: Tool = {
 const server = new Server(
   {
     name: "todoist-mcp-server",
-    version: "0.1.0",
+    version: "0.1.1",
   },
   {
     capabilities: {
@@ -157,6 +183,8 @@ function isCreateTaskArgs(args: unknown): args is {
   description?: string;
   due_string?: string;
   priority?: number;
+  project_id?: string;
+  project_name?: string;
 } {
   return (
     typeof args === "object" &&
@@ -168,6 +196,7 @@ function isCreateTaskArgs(args: unknown): args is {
 
 function isGetTasksArgs(args: unknown): args is { 
   project_id?: string;
+  project_name?: string;
   filter?: string;
   priority?: number;
   limit?: number;
@@ -175,6 +204,16 @@ function isGetTasksArgs(args: unknown): args is {
   return (
     typeof args === "object" &&
     args !== null
+  );
+}
+
+function isGetProjectsArgs(args: unknown): args is {
+  filter?: string;
+} {
+  return (
+    typeof args === "object" &&
+    args !== null &&
+    (args as any).filter === undefined || typeof (args as any).filter === "string"
   );
 }
 
@@ -217,7 +256,7 @@ function isCompleteTaskArgs(args: unknown): args is {
 
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [CREATE_TASK_TOOL, GET_TASKS_TOOL, UPDATE_TASK_TOOL, DELETE_TASK_TOOL, COMPLETE_TASK_TOOL],
+  tools: [CREATE_TASK_TOOL, GET_TASKS_TOOL, GET_PROJECTS_TOOL, UPDATE_TASK_TOOL, DELETE_TASK_TOOL, COMPLETE_TASK_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -232,16 +271,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!isCreateTaskArgs(args)) {
         throw new Error("Invalid arguments for todoist_create_task");
       }
+      
+      let projectId = args.project_id;
+      
+      // If project_name is provided but not project_id, try to find the project by name
+      if (!projectId && args.project_name) {
+        try {
+          const projects = await todoistClient.getProjects();
+          const projectNameLower = args.project_name.toLowerCase();
+          const matchingProject = projects.find(project => 
+            project.name.toLowerCase().includes(projectNameLower)
+          );
+          
+          if (matchingProject) {
+            projectId = matchingProject.id;
+          }
+        } catch (error) {
+          console.error("Error finding project by name:", error);
+        }
+      }
+      
       const task = await todoistClient.addTask({
         content: args.content,
         description: args.description,
         dueString: args.due_string,
-        priority: args.priority
+        priority: args.priority,
+        projectId: projectId
       });
+      
+      // Get project name for the response if we have a project ID
+      let projectName = "";
+      if (projectId) {
+        try {
+          const project = await todoistClient.getProject(projectId);
+          projectName = project.name;
+        } catch (error) {
+          console.error("Error getting project details:", error);
+        }
+      }
+      
       return {
         content: [{ 
           type: "text", 
-          text: `Task created:\nTitle: ${task.content}${task.description ? `\nDescription: ${task.description}` : ''}${task.due ? `\nDue: ${task.due.string}` : ''}${task.priority ? `\nPriority: ${task.priority}` : ''}` 
+          text: `Task created:\nTitle: ${task.content}${task.description ? `\nDescription: ${task.description}` : ''}${task.due ? `\nDue: ${task.due.string}` : ''}${task.priority ? `\nPriority: ${task.priority}` : ''}${projectName ? `\nProject: ${projectName}` : ''}` 
         }],
         isError: false,
       };
@@ -252,10 +324,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error("Invalid arguments for todoist_get_tasks");
       }
       
-      const tasks = await todoistClient.getTasks({
-        projectId: args.project_id,
-        filter: args.filter
-      });
+      let projectId = args.project_id;
+      let projectName = "";
+      
+      // If project_name is provided but not project_id, try to find the project by name
+      if (!projectId && args.project_name) {
+        try {
+          const projects = await todoistClient.getProjects();
+          const projectNameLower = args.project_name.toLowerCase();
+          const matchingProject = projects.find(project => 
+            project.name.toLowerCase().includes(projectNameLower)
+          );
+          
+          if (matchingProject) {
+            projectId = matchingProject.id;
+            projectName = matchingProject.name;
+          }
+        } catch (error) {
+          console.error("Error finding project by name:", error);
+        }
+      }
+      
+      // Only pass filter if at least one filtering parameter is provided
+      const apiParams: any = {};
+      if (projectId) {
+        apiParams.projectId = projectId;
+      }
+      if (args.filter) {
+        apiParams.filter = args.filter;
+      }
+      // If no filters provided, default to showing all tasks
+      const tasks = await todoistClient.getTasks(Object.keys(apiParams).length > 0 ? apiParams : undefined);
 
       // Apply additional filters
       let filteredTasks = tasks;
@@ -268,18 +367,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         filteredTasks = filteredTasks.slice(0, args.limit);
       }
       
+      // Get project name if we have a project ID but no name yet
+      if (projectId && !projectName) {
+        try {
+          const project = await todoistClient.getProject(projectId);
+          projectName = project.name;
+        } catch (error) {
+          console.error("Error getting project details:", error);
+        }
+      }
+      
       const taskList = filteredTasks.map(task => 
         `- ${task.content}${task.description ? `\n  Description: ${task.description}` : ''}${task.due ? `\n  Due: ${task.due.string}` : ''}${task.priority ? `\n  Priority: ${task.priority}` : ''}`
+      ).join('\n\n');
+      
+      const headerText = projectName ? `Tasks in project "${projectName}":\n\n` : "";
+      
+      return {
+        content: [{ 
+          type: "text", 
+          text: filteredTasks.length > 0 ? 
+            headerText + taskList : 
+            projectName ? 
+              `No tasks found in project "${projectName}"` : 
+              "No tasks found matching the criteria" 
+        }],
+        isError: false,
+      };
+    }
+
+    if (name === "todoist_get_projects") {
+      if (!isGetProjectsArgs(args)) {
+        throw new Error("Invalid arguments for todoist_get_projects");
+      }
+      
+      // Get all projects first
+      const projects = await todoistClient.getProjects();
+      
+      // Filter projects if a filter is provided
+      let filteredProjects = projects;
+      if (args.filter) {
+        const filterLower = args.filter.toLowerCase();
+        filteredProjects = projects.filter(project => 
+          project.name.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Format the project list with project IDs for reference
+      const projectList = filteredProjects.map(project => 
+        `- ${project.name} (ID: ${project.id})`
       ).join('\n\n');
       
       return {
         content: [{ 
           type: "text", 
-          text: filteredTasks.length > 0 ? taskList : "No tasks found matching the criteria" 
+          text: filteredProjects.length > 0 ? projectList : "No projects found matching the criteria" 
         }],
         isError: false,
       };
-    }
+    } 
 
     if (name === "todoist_update_task") {
       if (!isUpdateTaskArgs(args)) {
