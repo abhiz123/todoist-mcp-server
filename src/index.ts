@@ -12,7 +12,7 @@ import { TodoistApi } from "@doist/todoist-api-typescript";
 // Define tools
 const CREATE_TASK_TOOL: Tool = {
   name: "todoist_create_task",
-  description: "Create a new task in Todoist with optional description, due date, and priority",
+  description: "Create a new task in Todoist with optional description, due date, priority, section, and parent task support",
   inputSchema: {
     type: "object",
     properties: {
@@ -32,6 +32,22 @@ const CREATE_TASK_TOOL: Tool = {
         type: "string",
         description: "Name of the project to add the task to (e.g., 'Shopping', 'Work') (optional)"
       },
+      section_id: {
+        type: "string",
+        description: "ID of the section to add the task to (optional)"
+      },
+      section_name: {
+        type: "string",
+        description: "Name of the section to add the task to (e.g., 'Groceries', 'Meetings') (optional)"
+      },
+      parent_id: {
+        type: "string",
+        description: "ID of the parent task to create this as a subtask (optional)"
+      },
+      parent_task_name: {
+        type: "string",
+        description: "Name/content of the parent task to create this as a subtask (optional)"
+      },
       due_string: {
         type: "string",
         description: "Natural language due date like 'tomorrow', 'next Monday', 'Jan 23' (optional)"
@@ -48,7 +64,7 @@ const CREATE_TASK_TOOL: Tool = {
 
 const GET_TASKS_TOOL: Tool = {
   name: "todoist_get_tasks",
-  description: "Get a list of tasks from Todoist with various filters",
+  description: "Get a list of tasks from Todoist with various filters including section and parent task",
   inputSchema: {
     type: "object",
     properties: {
@@ -59,6 +75,22 @@ const GET_TASKS_TOOL: Tool = {
       project_name: {
         type: "string",
         description: "Filter tasks by project name (e.g., 'Shopping', 'Work') (optional)"
+      },
+      section_id: {
+        type: "string",
+        description: "Filter tasks by section ID (optional)"
+      },
+      section_name: {
+        type: "string",
+        description: "Filter tasks by section name (e.g., 'Groceries', 'Meetings') (optional)"
+      },
+      parent_id: {
+        type: "string",
+        description: "Filter tasks by parent task ID to get subtasks (optional)"
+      },
+      parent_task_name: {
+        type: "string",
+        description: "Filter tasks by parent task name to get subtasks (optional)"
       },
       filter: {
         type: "string",
@@ -158,7 +190,7 @@ const COMPLETE_TASK_TOOL: Tool = {
 const server = new Server(
   {
     name: "todoist-mcp-server",
-    version: "0.1.1",
+    version: "0.1.2",
   },
   {
     capabilities: {
@@ -185,6 +217,10 @@ function isCreateTaskArgs(args: unknown): args is {
   priority?: number;
   project_id?: string;
   project_name?: string;
+  section_id?: string;
+  section_name?: string;
+  parent_id?: string;
+  parent_task_name?: string;
 } {
   return (
     typeof args === "object" &&
@@ -197,6 +233,10 @@ function isCreateTaskArgs(args: unknown): args is {
 function isGetTasksArgs(args: unknown): args is { 
   project_id?: string;
   project_name?: string;
+  section_id?: string;
+  section_name?: string;
+  parent_id?: string;
+  parent_task_name?: string;
   filter?: string;
   priority?: number;
   limit?: number;
@@ -291,12 +331,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
       
+      let sectionId = args.section_id;
+      
+      // If section_name is provided but not section_id, try to find the section by name
+      if (!sectionId && args.section_name && projectId) {
+        try {
+          const sections = await todoistClient.getSections(projectId);
+          const sectionNameLower = args.section_name.toLowerCase();
+          const matchingSection = sections.find(section => 
+            section.name.toLowerCase().includes(sectionNameLower)
+          );
+          
+          if (matchingSection) {
+            sectionId = matchingSection.id;
+          }
+        } catch (error) {
+          console.error("Error finding section by name:", error);
+        }
+      }
+      
+      let parentId = args.parent_id;
+      
+      // If parent_task_name is provided but not parent_id, try to find the parent task by name
+      if (!parentId && args.parent_task_name) {
+        try {
+          const tasks = await todoistClient.getTasks();
+          const parentTaskNameLower = args.parent_task_name.toLowerCase();
+          const matchingTask = tasks.find(task => 
+            task.content.toLowerCase().includes(parentTaskNameLower)
+          );
+          
+          if (matchingTask) {
+            parentId = matchingTask.id;
+          }
+        } catch (error) {
+          console.error("Error finding parent task by name:", error);
+        }
+      }
+      
       const task = await todoistClient.addTask({
         content: args.content,
         description: args.description,
         dueString: args.due_string,
         priority: args.priority,
-        projectId: projectId
+        projectId: projectId,
+        sectionId: sectionId,
+        parentId: parentId
       });
       
       // Get project name for the response if we have a project ID
@@ -310,10 +390,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
       
+      // Get section name if we have a section ID
+      let sectionName = "";
+      if (sectionId) {
+        try {
+          const sections = await todoistClient.getSections(projectId);
+          const section = sections.find(s => s.id === sectionId);
+          if (section) {
+            sectionName = section.name;
+          }
+        } catch (error) {
+          console.error("Error getting section details:", error);
+        }
+      }
+      
+      // Get parent task info if we have a parent ID
+      let parentTaskName = "";
+      if (parentId) {
+        try {
+          const parentTask = await todoistClient.getTask(parentId);
+          if (parentTask) {
+            parentTaskName = parentTask.content;
+          }
+        } catch (error) {
+          console.error("Error getting parent task details:", error);
+        }
+      }
+      
       return {
         content: [{ 
           type: "text", 
-          text: `Task created:\nTitle: ${task.content}${task.description ? `\nDescription: ${task.description}` : ''}${task.due ? `\nDue: ${task.due.string}` : ''}${task.priority ? `\nPriority: ${task.priority}` : ''}${projectName ? `\nProject: ${projectName}` : ''}` 
+          text: `Task created:\nTitle: ${task.content}${task.description ? `\nDescription: ${task.description}` : ''}${task.due ? `\nDue: ${task.due.string}` : ''}${task.priority ? `\nPriority: ${task.priority}` : ''}${projectName ? `\nProject: ${projectName}` : ''}${sectionName ? `\nSection: ${sectionName}` : ''}${parentTaskName ? `\nParent Task: ${parentTaskName}` : ''}` 
         }],
         isError: false,
       };
@@ -345,6 +452,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
       
+      // Handle section filtering
+      let sectionId = args.section_id;
+      let sectionName = "";
+      
+      // If section_name is provided but not section_id, try to find the section by name
+      if (!sectionId && args.section_name && projectId) {
+        try {
+          const sections = await todoistClient.getSections(projectId);
+          const sectionNameLower = args.section_name.toLowerCase();
+          const matchingSection = sections.find(section => 
+            section.name.toLowerCase().includes(sectionNameLower)
+          );
+          
+          if (matchingSection) {
+            sectionId = matchingSection.id;
+            sectionName = matchingSection.name;
+          }
+        } catch (error) {
+          console.error("Error finding section by name:", error);
+        }
+      }
+      
+      // Handle parent task filtering
+      let parentId = args.parent_id;
+      let parentTaskName = "";
+      
+      // If parent_task_name is provided but not parent_id, try to find the parent task by name
+      if (!parentId && args.parent_task_name) {
+        try {
+          const allTasks = await todoistClient.getTasks();
+          const parentTaskNameLower = args.parent_task_name.toLowerCase();
+          const matchingTask = allTasks.find(task => 
+            task.content.toLowerCase().includes(parentTaskNameLower)
+          );
+          
+          if (matchingTask) {
+            parentId = matchingTask.id;
+            parentTaskName = matchingTask.content;
+          }
+        } catch (error) {
+          console.error("Error finding parent task by name:", error);
+        }
+      }
+      
       // Only pass filter if at least one filtering parameter is provided
       const apiParams: any = {};
       if (projectId) {
@@ -358,8 +509,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Apply additional filters
       let filteredTasks = tasks;
+      
+      // Filter by priority if specified
       if (args.priority) {
         filteredTasks = filteredTasks.filter(task => task.priority === args.priority);
+      }
+      
+      // Filter by section if specified
+      if (sectionId) {
+        filteredTasks = filteredTasks.filter(task => task.sectionId === sectionId);
+      }
+      
+      // Filter by parent task if specified
+      if (parentId) {
+        filteredTasks = filteredTasks.filter(task => task.parentId === parentId);
       }
       
       // Apply limit
@@ -381,7 +544,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         `- ${task.content}${task.description ? `\n  Description: ${task.description}` : ''}${task.due ? `\n  Due: ${task.due.string}` : ''}${task.priority ? `\n  Priority: ${task.priority}` : ''}`
       ).join('\n\n');
       
-      const headerText = projectName ? `Tasks in project "${projectName}":\n\n` : "";
+      // Create appropriate header text based on filters
+      let headerText = "";
+      if (projectName && sectionName) {
+        headerText = `Tasks in section "${sectionName}" of project "${projectName}":\n\n`;
+      } else if (projectName) {
+        headerText = `Tasks in project "${projectName}":\n\n`;
+      } else if (parentTaskName) {
+        headerText = `Subtasks of "${parentTaskName}":\n\n`;
+      }
       
       return {
         content: [{ 

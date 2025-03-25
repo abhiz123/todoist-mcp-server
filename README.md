@@ -35,7 +35,7 @@ npm install -g @abhiz123/todoist-mcp-server
 ### todoist_create_task
 Create new tasks with various attributes:
 * Required: content (task title)
-* Optional: description, due date, priority level (1-4)
+* Optional: description, due date, priority level (1-4), section, parent task
 * Example: "Create task 'Team Meeting' with description 'Weekly sync' due tomorrow"
 
 ### todoist_get_tasks
@@ -95,6 +95,8 @@ Add to your `claude_desktop_config.json`:
 "Create task 'Team Meeting'"
 "Add task 'Review PR' due tomorrow at 2pm"
 "Create high priority task 'Fix bug' with description 'Critical performance issue'"
+"Create new task: See Sakura, due date: next Weekend, in project: 'Personal' and section: 'Life'"
+"Create subtask 'Buy ticket' for task 'See Sakura' a day before the parent task due date"
 ```
 
 ### Getting Tasks
@@ -103,6 +105,9 @@ Add to your `claude_desktop_config.json`:
 "List tasks due today"
 "Get high priority tasks"
 "Show tasks due this week"
+"List all tasks in project: Personal"
+"List tasks in project: Personal and section: Life"
+"List all subtasks under task: See Sakura"
 ```
 
 ### Updating Tasks
